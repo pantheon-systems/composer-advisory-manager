@@ -104,7 +104,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        composer-version: [ '2.9', '2.8', '2.7' ]
+        composer-version: [ '2.9' ] # Only test with 2.9+ which has audit blocking
 
     steps:
       - name: Checkout code
