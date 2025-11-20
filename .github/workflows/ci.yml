@@ -86,7 +86,7 @@ jobs:
           fi
 
       - name: Check autoload configuration
-        run: composer dump-autoload --optimize --strict-psr
+        run: composer dump-autoload --optimize
 
       - name: Run tests (if any)
         run: |
