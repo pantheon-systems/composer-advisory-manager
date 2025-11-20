@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "*" ]
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+          coverage: none
+
+      - name: Validate composer.json and composer.lock
+        run: composer validate --strict
+
+      - name: Check composer.json format
+        run: |
+          composer normalize --dry-run --diff || echo "Consider running 'composer normalize' to format composer.json"
+
+  test:
+    name: Test PHP ${{ matrix.php-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: validate
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        php-version: [ '7.4', '8.0', '8.1', '8.2', '8.3' ]
+        composer-version: [ 'v2.2', 'v2.9' ] # Test with Composer 2.2 (first with allow-plugins) and 2.9 (audit blocking)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: composer:${{ matrix.composer-version }}
+          coverage: none
+          extensions: json
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ matrix.php-version }}-${{ hashFiles('**/composer.json') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-${{ matrix.php-version }}-
+            ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --optimize-autoloader
+
+      - name: Display Composer version
+        run: composer --version
+
+      - name: Verify plugin class exists
+        run: |
+          if [ -f src/AdvisoryManagerPlugin.php ]; then
+            echo "✓ Plugin class found"
+          else
+            echo "✗ Plugin class not found"
+            exit 1
+          fi
+
+      - name: Check autoload configuration
+        run: composer dump-autoload --optimize --strict-psr
+
+      - name: Run tests (if any)
+        run: |
+          if [ -f ./vendor/bin/phpunit ]; then
+            ./vendor/bin/phpunit
+          else
+            echo "No PHPUnit tests found, skipping."
+          fi
+
+  integration-test:
+    name: Integration Test - Composer ${{ matrix.composer-version }}
+    runs-on: ubuntu-latest
+    needs: test
+
+    strategy:
+      fail-fast: false
+      matrix:
+        composer-version: [ '2.9', '2.8', '2.7' ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:${{ matrix.composer-version }}
+          coverage: none
+
+      - name: Run integration test script
+        run: ./tests/test-composer-plugin.sh
+        env:
+          PLUGIN_PATH: ${{ github.workspace }}
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-composer-${{ matrix.composer-version }}
+          path: /tmp/composer-audit-repro/*.log
+          retention-days: 7
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run composer audit
+        run: |
+          composer audit --format=json > audit-report.json || true
+          cat audit-report.json
+
+      - name: Check for high severity vulnerabilities
+        run: |
+          if grep -q '"severity":"high"' audit-report.json || grep -q '"severity":"critical"' audit-report.json; then
+            echo "⚠️ High or critical severity vulnerabilities detected"
+            echo "This is expected for a plugin that manages advisories"
+          else
+            echo "✓ No high/critical severity vulnerabilities"
+          fi
