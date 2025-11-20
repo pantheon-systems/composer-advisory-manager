@@ -132,6 +132,8 @@ if [ -n "$ADDED" ]; then
   echo "$ADDED"
 else
   echo "  ❌ No advisory IDs were appended — may indicate upstream packages changed"
+  echo "  📄 Pantheon plugin output from pass.log:"
+  grep -i "pantheon" pass.log || echo "  (no Pantheon output found)"
   exit 1
 fi
 
