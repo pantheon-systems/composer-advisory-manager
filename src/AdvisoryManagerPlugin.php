@@ -112,7 +112,7 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
             return;
         }
 
-        $cmd = 'composer audit --format=json 2>&1';
+        $cmd = 'composer audit --format=json 2>/dev/null';
         $io->writeError('<comment>[Pantheon]</comment> Running `composer audit` to detect new advisories to ignore...');
         $output = [];
         $return = null;
@@ -121,7 +121,6 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
         // Note: composer audit returns non-zero when advisories are found, which is expected
         if (empty($output)) {
             $io->writeError('<comment>[Pantheon]</comment> Could not get audit results — skipping advisory auto-ignore.');
-            $io->writeError('<comment>[Pantheon]</comment> Debug: exec returned code ' . $return);
             return;
         }
 
@@ -129,7 +128,6 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
         $json = @json_decode($outputStr, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             $io->writeError('<comment>[Pantheon]</comment> Could not parse audit JSON — skipping advisory auto-ignore.');
-            $io->writeError('<comment>[Pantheon]</comment> Debug: ' . substr($outputStr, 0, 200));
             return;
         }
 
