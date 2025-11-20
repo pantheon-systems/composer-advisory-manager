@@ -105,6 +105,13 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
         $composer = $event->getComposer();
         $io       = $event->getIO();
 
+        // Get the lock file to check for advisories
+        $locker = $composer->getLocker();
+        if (!$locker || !$locker->isLocked()) {
+            $io->writeError('<comment>[Pantheon]</comment> No lock file found — skipping advisory auto-ignore.');
+            return;
+        }
+
         $cmd = 'composer audit --format=json 2>&1';
         $io->writeError('<comment>[Pantheon]</comment> Running `composer audit` to detect new advisories to ignore...');
         $output = [];
@@ -114,12 +121,15 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
         // Note: composer audit returns non-zero when advisories are found, which is expected
         if (empty($output)) {
             $io->writeError('<comment>[Pantheon]</comment> Could not get audit results — skipping advisory auto-ignore.');
+            $io->writeError('<comment>[Pantheon]</comment> Debug: exec returned code ' . $return);
             return;
         }
 
-        $json = @json_decode(implode("\n", $output), true);
+        $outputStr = implode("\n", $output);
+        $json = @json_decode($outputStr, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             $io->writeError('<comment>[Pantheon]</comment> Could not parse audit JSON — skipping advisory auto-ignore.');
+            $io->writeError('<comment>[Pantheon]</comment> Debug: ' . substr($outputStr, 0, 200));
             return;
         }
 
