@@ -29,8 +29,6 @@ The Pantheon `composer-advisory-manager` plugin keeps builds working by:
 - **Displaying security warnings prominently in build output**
 - **Providing remediation guidance for site owners and developers**
 
-No deployment and no changes to your `composer.json` are required.
-
 ---
 
 ## 🚀 Installation
