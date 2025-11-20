@@ -102,7 +102,7 @@ if [ $INSTALL_EXIT -ne 0 ]; then
   echo "   ⚠️  Simple installation failed (expected with vulnerable packages)"
   echo "   Using manual method: temporarily disabling audit blocking..."
   composer config audit.block-insecure false
-  composer require pantheon-systems/composer-advisory-manager --no-interaction
+  composer require pantheon-systems/composer-advisory-manager --no-interaction >install.log 2>&1
 
   echo "🧹 Unsetting manual audit config to let plugin take over..."
   composer config --unset audit.block-insecure
@@ -126,14 +126,15 @@ else
 fi
 
 echo "🔍 Checking that advisory IDs were auto-added to audit.ignore..."
-ADDED=$(grep "Added advisory ID to ignore list" pass.log || true)
+# Check install.log since that's where advisories are first detected and added
+ADDED=$(grep "Added advisory ID to ignore list" install.log || true)
 if [ -n "$ADDED" ]; then
   echo "  ✔ Advisory IDs auto-appended:"
   echo "$ADDED"
 else
   echo "  ❌ No advisory IDs were appended — may indicate upstream packages changed"
-  echo "  📄 Pantheon plugin output from pass.log:"
-  grep -i "pantheon" pass.log || echo "  (no Pantheon output found)"
+  echo "  📄 Pantheon plugin output from install.log:"
+  grep -i "pantheon" install.log || echo "  (no Pantheon output found)"
   exit 1
 fi
 
