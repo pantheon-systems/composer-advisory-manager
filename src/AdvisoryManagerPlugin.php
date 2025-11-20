@@ -141,12 +141,17 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
             return;
         }
 
+        // Update in-memory config
         $auditConfig['ignore'] = $newIgnore;
         $config->merge([
             'config' => [
                 'audit' => $auditConfig
             ]
         ]);
+
+        // Persist to composer.json using Composer's config source
+        $configSource = $composer->getConfig()->getConfigSource();
+        $configSource->addConfigSetting('audit.ignore', $newIgnore);
 
         $added = array_diff($newIgnore, $existingIgnored);
         foreach ($added as $id) {
