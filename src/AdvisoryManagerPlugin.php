@@ -105,13 +105,14 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
         $composer = $event->getComposer();
         $io       = $event->getIO();
 
-        $cmd = 'composer audit --format=json';
+        $cmd = 'composer audit --format=json 2>&1';
         $io->writeError('<comment>[Pantheon]</comment> Running `composer audit` to detect new advisories to ignore...');
         $output = [];
         $return = null;
         exec($cmd, $output, $return);
 
-        if ($return !== 0 || empty($output)) {
+        // Note: composer audit returns non-zero when advisories are found, which is expected
+        if (empty($output)) {
             $io->writeError('<comment>[Pantheon]</comment> Could not get audit results — skipping advisory auto-ignore.');
             return;
         }
