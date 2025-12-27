@@ -15,6 +15,19 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
     /** @var bool */
     private $firstRunShown = false;
 
+    /**
+     * Check if output indicates the audit command is not available.
+     *
+     * @param string $output
+     * @return bool
+     */
+    private function isAuditCommandUnavailable(string $output): bool
+    {
+        // Check for Composer's "command not defined" error
+        return stripos($output, 'Command "audit" is not defined') !== false
+            || stripos($output, "Command 'audit' is not defined") !== false;
+    }
+
     public function activate(Composer $composer, IOInterface $io)
     {
         // Automatically disable audit blocking on activation
@@ -112,11 +125,19 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
             return;
         }
 
-        $cmd = 'composer audit --format=json 2>/dev/null';
+        $cmd = 'composer audit --format=json 2>&1';
         $io->writeError('<comment>[Pantheon]</comment> Running `composer audit` to detect new advisories to ignore...');
         $output = [];
         $return = null;
         exec($cmd, $output, $return);
+
+        $outputStr = implode("\n", $output);
+
+        // Check if audit command is not available (Composer < 2.4 or execution context issue)
+        if ($this->isAuditCommandUnavailable($outputStr)) {
+            $io->writeError('<comment>[Pantheon]</comment> Composer audit command not available in this context — skipping advisory auto-ignore.');
+            return;
+        }
 
         // Note: composer audit returns non-zero when advisories are found, which is expected
         if (empty($output)) {
@@ -124,7 +145,6 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
             return;
         }
 
-        $outputStr = implode("\n", $output);
         $json = @json_decode($outputStr, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             $io->writeError('<comment>[Pantheon]</comment> Could not parse audit JSON — skipping advisory auto-ignore.');
@@ -182,6 +202,11 @@ class AdvisoryManagerPlugin implements PluginInterface, EventSubscriberInterface
         }
 
         $outputStr = implode("\n", $output);
+
+        // Check if audit command is not available (Composer < 2.4 or execution context issue)
+        if ($this->isAuditCommandUnavailable($outputStr)) {
+            return;
+        }
 
         // Check if there are actual advisories (not just "No security vulnerability advisories found")
         if (stripos($outputStr, 'No security vulnerability advisories found') !== false) {
